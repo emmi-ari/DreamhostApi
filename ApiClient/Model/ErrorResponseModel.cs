@@ -5,6 +5,6 @@
         /// <summary>
         /// Reason name
         /// </summary>
-        public new string Data { get; init; }
+        public string Data { get; init; }
     }
 }

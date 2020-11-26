@@ -7,7 +7,7 @@ namespace ApiClient.Model
         /// <summary>
         /// An array of DNS entries
         /// </summary>
-        public new List<ResponseDataModel> Data { get; init; }
+        public List<ResponseDataModel> Data { get; init; }
 
         public class ResponseDataModel
         {

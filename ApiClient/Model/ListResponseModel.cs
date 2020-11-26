@@ -2,39 +2,34 @@
 
 namespace ApiClient.Model
 {
-    public class ListResponseModel
+    public class ListResponseModel : DnsCommandResponseModel
     {
-        /// <summary>
-        /// Success message of command
-        /// </summary>
-        public string Result { get; set; }
-
         /// <summary>
         /// An array of DNS entries
         /// </summary>
-        public IList<ResponseDataModel> Data { get; set; }
+        public new List<ResponseDataModel> Data { get; init; }
 
         public class ResponseDataModel
         {
             /// <summary>
             /// Indicates if the record is modifiable or not
             /// </summary>
-            public int Editable { get; set; }
+            public int Editable { get; init; }
 
             /// <summary>
             /// The name of the record
             /// </summary>
-            public string Record { get; set; }
+            public string Record { get; init; }
 
             /// <summary>
             /// The <see cref="RecordType"/> of the DNS entry
             /// </summary>
-            public string Type { get; set; }
+            public string Type { get; init; }
 
             /// <summary>
             /// The value of the record
             /// </summary>
-            public string Value { get; set; }
+            public string Value { get; init; }
         }
     }
 }

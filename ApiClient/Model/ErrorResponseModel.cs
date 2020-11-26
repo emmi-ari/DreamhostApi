@@ -1,9 +1,9 @@
 ﻿namespace ApiClient.Model
 {
-    public class ModifyResponseModel : DnsCommandResponseModel
+    public class ErrorResponseModel : DnsCommandResponseModel
     {
         /// <summary>
-        /// Describes the performed action
+        /// Reason name
         /// </summary>
         public new string Data { get; init; }
     }

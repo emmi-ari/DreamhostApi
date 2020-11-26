@@ -35,12 +35,13 @@ namespace ApiClient
     /// Lists or modifies DreamHost DNS records using DreamHost's API
     /// </summary>
     /// <exception cref="HttpRequestException">Thrown when the HTTP status code is not a success code</exception>
-    public class ApiProcessor
+    public class DnsApiProcessor
     {
         private readonly string _apiKey;
 
         private readonly Uri _baseUri = new Uri("https://api.dreamhost.com");
-        public ApiProcessor(string apiKey)
+
+        public DnsApiProcessor(string apiKey)
         {
             _apiKey = apiKey;
         }
@@ -61,7 +62,7 @@ namespace ApiClient
         /// </code>
         /// </example>
         public async Task<ModifyResponseModel> AddRecord(string recordName, RecordType recordType, string value) =>
-            await ExecuteCommand(DnsCommand.AddRecord, recordName, recordType.ToString(), value);
+            await ExecuteCommand(DnsCommand.AddRecord, recordName, recordType.ToString(), value) as ModifyResponseModel;
 
         /// <summary>
         /// Removes a DNS record
@@ -79,16 +80,16 @@ namespace ApiClient
         /// </code>
         /// </example>
         public async Task<ModifyResponseModel> RemoveRecord(string recordName, RecordType recordType, string value) =>
-            await ExecuteCommand(DnsCommand.RemoveRecord, recordName, recordType.ToString(), value);
+            await ExecuteCommand(DnsCommand.RemoveRecord, recordName, recordType.ToString(), value) as ModifyResponseModel;
 
         /// <summary>
         /// Lists the records
         /// </summary>
         /// <returns>A response model with all necessary informations that gets returned from the API</returns>
         public async Task<ListResponseModel> ListRecords() =>
-            await ExecuteCommand(DnsCommand.ListRecord);
+            await ExecuteCommand(DnsCommand.ListRecord) as ListResponseModel;
 
-        private async Task<dynamic> ExecuteCommand(DnsCommand command, params string[] parameters)
+        private async Task<DnsCommandResponseModel> ExecuteCommand(DnsCommand command, params string[] parameters)
         {
             Client client = new Client();
             Uri uri = GetUri(command, parameters);
@@ -97,17 +98,18 @@ namespace ApiClient
             if (responseMessage.IsSuccessStatusCode)
             {
                 string response = await responseMessage.Content.ReadAsStringAsync();
-                switch (command)
+                try
                 {
-                    case DnsCommand.ListRecord:
-                        return JsonConvert.DeserializeObject<ListResponseModel>(response);
-
-                    case DnsCommand.AddRecord:
-                    case DnsCommand.RemoveRecord:
-                        return JsonConvert.DeserializeObject<ModifyResponseModel>(response);
-
-                    default:
-                        return response;
+                    return command switch
+                    {
+                        DnsCommand.ListRecord => JsonConvert.DeserializeObject<ListResponseModel>(response),
+                        DnsCommand.AddRecord or DnsCommand.RemoveRecord => JsonConvert.DeserializeObject<ModifyResponseModel>(response),
+                        _ => throw new ArgumentException($"Invalid parameter.", nameof(command)),
+                    };
+                }
+                catch (JsonSerializationException ex) when (ex.HResult == -2146233088)
+                {
+                    return JsonConvert.DeserializeObject<ErrorResponseModel>(response);
                 }
             }
             else
@@ -119,26 +121,15 @@ namespace ApiClient
         private Uri GetUri(DnsCommand command, params string[] parameters)
         {
             if (command != DnsCommand.ListRecord && parameters.Length != 3)
-                throw new ArgumentException(nameof(parameters), $"{nameof(parameters)} needs the record name, record type and the record value, when {command} is set to 'RemoveRecord' or 'AddRecord'.");
+                throw new ArgumentException($"{nameof(parameters)} needs the record name, record type and the record value, when {command} is set to 'RemoveRecord' or 'AddRecord'.", nameof(parameters));
 
             Guid guid = Guid.NewGuid();
 
-            string record = string.Empty;
-            string type = string.Empty;
-            string value = string.Empty;
-            string comment = string.Empty;
-
-            switch (command)
-            {
-                case DnsCommand.AddRecord:
-                case DnsCommand.RemoveRecord:
-                    record = parameters[0];
-                    type = parameters[1];
-                    value = parameters[2];
-                    comment = $"[{DateTime.UnixEpoch.Millisecond}] {command} {guid}";
-                    break;
-            }
-            
+            bool isModifierCmd = (command == DnsCommand.AddRecord || command == DnsCommand.RemoveRecord);
+            string record = isModifierCmd ? parameters[0] : null;
+            string type = isModifierCmd ? parameters[1] : null;
+            string value = isModifierCmd ? parameters[2] : null;
+            string comment = isModifierCmd ? $"[{DateTime.UnixEpoch.Millisecond}] {command} {guid}" : null;
 
             string relativeUrl = command switch
             {

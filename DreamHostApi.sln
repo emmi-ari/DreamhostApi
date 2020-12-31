@@ -5,7 +5,7 @@ VisualStudioVersion = 16.0.30711.63
 MinimumVisualStudioVersion = 15.0.26124.0
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ApiClient", "ApiClient\ApiClient.csproj", "{E1B3DCD1-1CBB-4C2D-877C-894FC94B1B4F}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ApiWrapper", "ApiWrapper\ApiWrapper.csproj", "{D1CEDFAC-9B76-4AA3-9153-B6DBEFBF6A74}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ApiWrapper", "ApiWrapper\ApiWrapper.csproj", "{D1CEDFAC-9B76-4AA3-9153-B6DBEFBF6A74}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

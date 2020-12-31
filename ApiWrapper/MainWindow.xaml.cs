@@ -2,14 +2,12 @@
 using ApiClient.Model;
 
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
 using System.Windows;
-
-using static ApiClient.Model.ListResponseModel;
+using System.Windows.Media;
 
 namespace ApiWrapper
 {
@@ -21,7 +19,7 @@ namespace ApiWrapper
          * 3. Visual representation if button needs to be clicked or not
          * 4. Button which deletes old DNS entry and adds new DNS entry
          * 5. Option for manually selecting which is the old DNS entry
-         * 6. Deactivate button if no need to update
+         * !6. Deactivate button if no need to update
          * 7. Functionallity to press the button even though it's deactivated
          * 8. Implement a normed way to store and access secrets
          */
@@ -29,6 +27,8 @@ namespace ApiWrapper
         private IPAddress _clientIp;
         private IPAddress _dnsIp;
         private bool addressesMatch;
+
+        private static ListResponseModel _editableEntries = new ListResponseModel();
 
         #region User secrets
         private readonly static string[] _secrets = File.ReadAllLines(@"C:\Users\Emmi\Source\Repos\DreamHostApi\.secrets");
@@ -44,6 +44,8 @@ namespace ApiWrapper
 
         private async void Window_Loaded(object sender, RoutedEventArgs e)
         {
+            //IConfigurationBuilder configurationBuilder = new ConfigurationBuilder();
+            //UserSecretsConfigurationExtensions.AddUserSecrets<dynamic>(configurationBuilder);
             _clientIp = await GetClientIpAsync();
 
             try
@@ -56,6 +58,22 @@ namespace ApiWrapper
             }
 
             addressesMatch = _clientIp == _dnsIp;
+
+            ownIpLabel.Content = _clientIp.ToString();
+            dnsIpLabel.Content = _dnsIp.ToString();
+
+            if (addressesMatch)
+            {
+                syncNeededLabel.Content = "No";
+                syncNeededLabel.Foreground = new SolidColorBrush(Color.FromRgb(24,200,24));
+                syncIpsButton.IsEnabled = false;
+            }
+            else
+            {
+                syncNeededLabel.Content = "No";
+                syncNeededLabel.Foreground = new SolidColorBrush(Color.FromRgb(200, 24, 24));
+                syncIpsButton.IsEnabled = true;
+            }
         }
 
         private static async Task<IPAddress> GetClientIpAsync()
@@ -69,13 +87,82 @@ namespace ApiWrapper
         private static async Task<IPAddress> GetDnsIpAsync()
         {
             DnsApiProcessor api = new(_apiKey);
-            ListResponseModel responseModel = await api.ListRecords(); // TODO implement a way to check for command errors
-            List<ResponseDataModel> editableEntries = responseModel.Data.Where(entry => entry.Editable == 1 && entry.Record == _domain && entry.Type == _entryType).ToList();
+            ListResponseModel responseModel = await api.ListRecords();
 
-            if (editableEntries.Count == 1)
-                return IPAddress.Parse(editableEntries[0].Value);
+            if (responseModel.Reason != null)
+                throw new Exception("stub"); // TODO throw more specific exception
+
+            _editableEntries.Data = responseModel.Data.Where(entry => entry.Editable == 1 && entry.Record == _domain && entry.Type == _entryType).ToList();
+
+            if (_editableEntries.Data.Count == 1)
+                return IPAddress.Parse(_editableEntries.Data[0].Value);
             else
                 throw new Exception("stub"); // TODO throw more specific exception
+        }
+
+        private void SyncIpsButton_Click(object sender, RoutedEventArgs e)
+        {
+            DnsApiProcessor api = new(_apiKey);
+            string recordName = _editableEntries.Data[0].Record;
+            _ = Enum.TryParse(_editableEntries.Data[0].Type, out RecordType recordType);
+            string recordValue = _editableEntries.Data[0].Value;
+
+            RemoveOldRecord(api, recordName, recordType, recordValue);
+            AddNew(api, recordName, recordType);
+
+            void RemoveOldRecord(DnsApiProcessor api, string recordName, RecordType recordType, string recordValue)
+            {
+                Task<ModifyResponseModel> removeRecordTask = Task.Run(async () => await api.RemoveRecord(recordName, recordType, recordValue));
+                if (removeRecordTask.Result.Result != "success")
+                {
+                    MessageBoxResult result = MessageBox.Show(owner: this,
+                        messageBoxText: $"Error while removing old entry{Environment.NewLine}" +
+                                        $"    Status code: {removeRecordTask.Result.Result}{Environment.NewLine}" +
+                                        $"    Reason: {removeRecordTask.Result.Reason}{Environment.NewLine}" +
+                                        $"Do you want to retry?",
+                        caption: $"{this.Title} - Remove old DNS record",
+                        button: MessageBoxButton.YesNo,
+                        icon: MessageBoxImage.Error,
+                        defaultResult: MessageBoxResult.No);
+
+                    if (result == MessageBoxResult.Yes)
+                        RemoveOldRecord(api, recordName, recordType, recordValue);
+                    else
+                        _ = MessageBox.Show(owner: this,
+                        messageBoxText: $"No modifications where made",
+                        caption: $"{this.Title} - Remove old DNS record",
+                        button: MessageBoxButton.OK,
+                        icon: MessageBoxImage.Exclamation);
+
+                }
+            }
+            
+            void AddNew(DnsApiProcessor api, string recordName, RecordType recordType)
+            {
+                Task<ModifyResponseModel> addRecordTask = Task.Run(async () => await api.AddRecord(recordName, recordType, _clientIp.ToString()));
+                if (addRecordTask.Result.Result != "success")
+                {
+                    MessageBoxResult result = MessageBox.Show(owner: this,
+                        messageBoxText: $"Error while adding new entry{Environment.NewLine}" +
+                                        $"    Status code: {addRecordTask.Result.Result}{Environment.NewLine}" +
+                                        $"    Reason: {addRecordTask.Result.Reason}{Environment.NewLine}" +
+                                        $"Do you want to retry? (recommended)",
+                        caption: $"{this.Title} - Add new DNS record",
+                        button: MessageBoxButton.YesNo,
+                        icon: MessageBoxImage.Error,
+                        defaultResult: MessageBoxResult.Yes);
+
+                    if (result == MessageBoxResult.Yes)
+                        AddNew(api, recordName, recordType);
+                    else
+                        MessageBox.Show(owner: this,
+                        messageBoxText: $"The old record for \"{recordName}\" couldn't be updated. There should now be no DNS records for this record for the type {recordType}. Manual action required to add the record.",
+                        caption: $"{this.Title} - Add new DNS record",
+                        button: MessageBoxButton.YesNo,
+                        icon: MessageBoxImage.Error,
+                        defaultResult: MessageBoxResult.Yes);
+                }
+            }
         }
     }
 }

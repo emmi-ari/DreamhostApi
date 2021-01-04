@@ -16,8 +16,8 @@ namespace ApiWrapper
         /* TODOs
          * !1. Get IP address of client
          * !2. Get IP address of DNS record
-         * 3. Visual representation if button needs to be clicked or not
-         * 4. Button which deletes old DNS entry and adds new DNS entry
+         * !3. Visual representation if button needs to be clicked or not
+         * !4. Button which deletes old DNS entry and adds new DNS entry
          * 5. Option for manually selecting which is the old DNS entry
          * !6. Deactivate button if no need to update
          * 7. Functionallity to press the button even though it's deactivated
@@ -26,27 +26,34 @@ namespace ApiWrapper
 
         private IPAddress _clientIp;
         private IPAddress _dnsIp;
+
         private bool addressesMatch;
 
-        private static ListResponseModel _editableEntries = new ListResponseModel();
+        private readonly ListResponseModel _editableEntries = new ListResponseModel();
 
         #region User secrets
-        private readonly static string[] _secrets = File.ReadAllLines(@"C:\Users\Emmi\Source\Repos\DreamHostApi\.secrets");
-        private readonly static string _apiKey = _secrets[0];
-        private readonly static string _domain = _secrets[1];
-        private readonly static string _entryType = _secrets[2];
+        private readonly string _apiKey;
+        private readonly string _domain;
+        private readonly string _entryType;
         #endregion
 
         public MainWindow()
         {
             InitializeComponent();
+
+            string[] secrets = File.ReadAllLines(@"C:\Users\Emmi\Source\Repos\DreamHostApi\.secrets"); // TODO Error handling
+            _apiKey = secrets[0];
+            _domain = secrets[1];
+            _entryType = secrets[2];
         }
 
-        private async void Window_Loaded(object sender, RoutedEventArgs e)
+        private async void Window_Loaded(object sender, RoutedEventArgs e) =>
+            await UpdateStatus();
+
+        private async Task UpdateStatus()
         {
-            //IConfigurationBuilder configurationBuilder = new ConfigurationBuilder();
-            //UserSecretsConfigurationExtensions.AddUserSecrets<dynamic>(configurationBuilder);
             _clientIp = await GetClientIpAsync();
+            //_clientIp = IPAddress.Parse("255.255.255.255");
 
             try
             {
@@ -57,7 +64,7 @@ namespace ApiWrapper
                 _ = MessageBox.Show(this, $"The specified DNS entry could not be found.", "Entry not found", MessageBoxButton.OK, MessageBoxImage.Exclamation);
             }
 
-            addressesMatch = _clientIp == _dnsIp;
+            addressesMatch = _clientIp.Equals(_dnsIp);
 
             ownIpLabel.Content = _clientIp.ToString();
             dnsIpLabel.Content = _dnsIp.ToString();
@@ -65,18 +72,18 @@ namespace ApiWrapper
             if (addressesMatch)
             {
                 syncNeededLabel.Content = "No";
-                syncNeededLabel.Foreground = new SolidColorBrush(Color.FromRgb(24,200,24));
+                syncNeededLabel.Foreground = new SolidColorBrush(Color.FromRgb(24, 200, 24));
                 syncIpsButton.IsEnabled = false;
             }
             else
             {
-                syncNeededLabel.Content = "No";
+                syncNeededLabel.Content = "Yes";
                 syncNeededLabel.Foreground = new SolidColorBrush(Color.FromRgb(200, 24, 24));
                 syncIpsButton.IsEnabled = true;
             }
         }
 
-        private static async Task<IPAddress> GetClientIpAsync()
+        private async Task<IPAddress> GetClientIpAsync()
         {
             using WebClient client = new();
             Stream stream = await client.OpenReadTaskAsync(new Uri("http://ipinfo.io/ip"));
@@ -84,7 +91,7 @@ namespace ApiWrapper
             return IPAddress.Parse(ipStream.ReadToEnd().Trim());
         }
 
-        private static async Task<IPAddress> GetDnsIpAsync()
+        private async Task<IPAddress> GetDnsIpAsync()
         {
             DnsApiProcessor api = new(_apiKey);
             ListResponseModel responseModel = await api.ListRecords();
@@ -100,7 +107,7 @@ namespace ApiWrapper
                 throw new Exception("stub"); // TODO throw more specific exception
         }
 
-        private void SyncIpsButton_Click(object sender, RoutedEventArgs e)
+        private async void SyncIpsButton_Click(object sender, RoutedEventArgs e)
         {
             DnsApiProcessor api = new(_apiKey);
             string recordName = _editableEntries.Data[0].Record;
@@ -109,6 +116,7 @@ namespace ApiWrapper
 
             RemoveOldRecord(api, recordName, recordType, recordValue);
             AddNew(api, recordName, recordType);
+            await UpdateStatus();
 
             void RemoveOldRecord(DnsApiProcessor api, string recordName, RecordType recordType, string recordValue)
             {
@@ -161,6 +169,14 @@ namespace ApiWrapper
                         button: MessageBoxButton.YesNo,
                         icon: MessageBoxImage.Error,
                         defaultResult: MessageBoxResult.Yes);
+                }
+                else
+                {
+                    _ = MessageBox.Show(owner: this,
+                        messageBoxText: $"The DNS entry for {_domain} (Type \"{_entryType}\") was successfully updated from {_dnsIp} to {_clientIp}",
+                        caption: $"{this.Title} - Successfully updated entry",
+                        button: MessageBoxButton.OK,
+                        icon: MessageBoxImage.Information);
                 }
             }
         }

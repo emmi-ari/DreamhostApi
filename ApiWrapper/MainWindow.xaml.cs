@@ -21,9 +21,10 @@ namespace ApiWrapper
          * 5. Option for manually selecting which is the old DNS entry
          * !6. Deactivate button if no need to update
          * 7. Functionallity to press the button even though it's deactivated
-         * 8. Implement a normed way to store and access secrets
+         * 8. Implement a normed way to store and access secrets (check for a existing secret file => first run => prompt for secrets)
+         * 9. Add menu for user secrets
          */
-
+        
         private IPAddress _clientIp;
         private IPAddress _dnsIp;
 

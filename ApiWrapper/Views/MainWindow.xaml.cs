@@ -7,49 +7,81 @@ using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Input;
 using System.Windows.Media;
 
+#pragma warning disable CA1822
 namespace ApiWrapper
 {
     public partial class MainWindow : Window
     {
         /* TODOs
-         * !1. Get IP address of client
-         * !2. Get IP address of DNS record
-         * !3. Visual representation if button needs to be clicked or not
-         * !4. Button which deletes old DNS entry and adds new DNS entry
-         * 5. Option for manually selecting which is the old DNS entry
-         * !6. Deactivate button if no need to update
-         * 7. Functionallity to press the button even though it's deactivated
-         * 8. Implement a normed way to store and access secrets (check for a existing secret file => first run => prompt for secrets)
-         * 9. Add menu for user secrets
+         *  !1. Get IP address of client
+         *  !2. Get IP address of DNS record
+         *  !3. Visual representation if button needs to be clicked or not
+         *  !4. Button which deletes old DNS entry and adds new DNS entry
+         *   5. Option for manually selecting which is the old DNS entry
+         *  !6. Deactivate button if no need to update
+         *   7. Functionallity to press the button even though it's deactivated
+         *   8. Implement a normed way to store and access secrets (check for a existing secret file => first run => prompt for secrets)
+         *   9. Add menu for user secrets
+         *  10. Add localization 
+         *  11. Actually validate the settings
          */
-        
+
         private IPAddress _clientIp;
         private IPAddress _dnsIp;
 
-        private bool addressesMatch;
+        private bool _addressesMatch;
 
         private readonly ListResponseModel _editableEntries = new ListResponseModel();
+
+        private bool _shiftDown = false;
+        private bool _initialButtonState;
 
         #region User secrets
         private readonly string _apiKey;
         private readonly string _domain;
-        private readonly string _entryType;
+        private readonly string _recordType;
         #endregion
 
         public MainWindow()
         {
             InitializeComponent();
 
-            string[] secrets = File.ReadAllLines(@"C:\Users\Emmi\Source\Repos\DreamHostApi\.secrets"); // TODO Error handling
-            _apiKey = secrets[0];
-            _domain = secrets[1];
-            _entryType = secrets[2];
+            string[] secrets = File.ReadAllLines(@"C:\Users\Emmi\Source\Repos\DreamHostApi\.secrets"); // legacy
+            _apiKey = secrets[0];                                                                           // legacy
+            _domain = secrets[1];                                                                           // legacy
+            _recordType = secrets[2];                                                                       // legacy
         }
 
-        private async void Window_Loaded(object sender, RoutedEventArgs e) =>
+        private async void Window_Loaded(object sender, RoutedEventArgs e)
+        {
+            if (SettingsValidator())
+                LaunchSettingsWindow();
+
             await UpdateStatus();
+        }
+
+        private static bool SettingsValidator()
+        {
+            AppSettings settings = new();
+            bool appUnconfigured = settings.apiKey == string.Empty
+                                || settings.domain == string.Empty
+                                || settings.recordType == string.Empty;
+
+            return appUnconfigured;
+        }
+
+        private void LaunchSettingsWindow()
+        {
+            ConfigurationWindow window = new(this);
+            window.ShowDialog();
+            if (!SettingsValidator())
+            {
+                // TODO show message 
+            }
+        }
 
         private async Task UpdateStatus()
         {
@@ -65,12 +97,12 @@ namespace ApiWrapper
                 _ = MessageBox.Show(this, $"The specified DNS entry could not be found.", "Entry not found", MessageBoxButton.OK, MessageBoxImage.Exclamation);
             }
 
-            addressesMatch = _clientIp.Equals(_dnsIp);
+            _addressesMatch = _clientIp.Equals(_dnsIp);
 
             ownIpLabel.Content = _clientIp.ToString();
             dnsIpLabel.Content = _dnsIp.ToString();
 
-            if (addressesMatch)
+            if (_addressesMatch)
             {
                 syncNeededLabel.Content = "No";
                 syncNeededLabel.Foreground = new SolidColorBrush(Color.FromRgb(24, 200, 24));
@@ -82,6 +114,8 @@ namespace ApiWrapper
                 syncNeededLabel.Foreground = new SolidColorBrush(Color.FromRgb(200, 24, 24));
                 syncIpsButton.IsEnabled = true;
             }
+
+            _initialButtonState = syncIpsButton.IsEnabled;
         }
 
         private async Task<IPAddress> GetClientIpAsync()
@@ -100,7 +134,7 @@ namespace ApiWrapper
             if (responseModel.Reason != null)
                 throw new Exception("stub"); // TODO throw more specific exception
 
-            _editableEntries.Data = responseModel.Data.Where(entry => entry.Editable == 1 && entry.Record == _domain && entry.Type == _entryType).ToList();
+            _editableEntries.Data = responseModel.Data.Where(entry => entry.Editable == 1 && entry.Record == _domain && entry.Type == _recordType).ToList();
 
             if (_editableEntries.Data.Count == 1)
                 return IPAddress.Parse(_editableEntries.Data[0].Value);
@@ -174,12 +208,19 @@ namespace ApiWrapper
                 else
                 {
                     _ = MessageBox.Show(owner: this,
-                        messageBoxText: $"The DNS entry for {_domain} (Type \"{_entryType}\") was successfully updated from {_dnsIp} to {_clientIp}",
+                        messageBoxText: $"The DNS entry for {_domain} (Type \"{_recordType}\") was successfully updated from {_dnsIp} to {_clientIp}",
                         caption: $"{this.Title} - Successfully updated entry",
                         button: MessageBoxButton.OK,
                         icon: MessageBoxImage.Information);
                 }
             }
         }
+
+        private void SyncIpsButton_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (!syncIpsButton.IsEnabled && _shiftDown)
+                syncIpsButton.IsEnabled = true;
+        }
     }
 }
+#pragma warning restore CA1822

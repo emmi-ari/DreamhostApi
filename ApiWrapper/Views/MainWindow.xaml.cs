@@ -176,7 +176,6 @@ namespace ApiWrapper
                         caption: $"{this.Title} - Remove old DNS record",
                         button: MessageBoxButton.OK,
                         icon: MessageBoxImage.Exclamation);
-
                 }
             }
             
